@@ -7,25 +7,32 @@ set -e  # exit if any command fails
 # ---- USER VARIABLES ----
 CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/tree/Linux/agent.json"
 
-# ---- INSTALL SCALYR AGENT ----
+# ---- CREATE TEMP CONFIG BEFORE INSTALL ----
+echo "[INFO] Creating temporary config so install doesn't fail..."
+sudo mkdir -p /etc/scalyr-agent-2
+echo '{}' | sudo tee /etc/scalyr-agent-2/agent.json >/dev/null
+sudo chown root:root /etc/scalyr-agent-2/agent.json
+sudo chmod 644 /etc/scalyr-agent-2/agent.json
+
+# ---- UPDATE & INSTALL SCALYR AGENT ----
 echo "[INFO] Updating package list..."
 sudo apt-get update -y
 
-echo "[INFO] Installing Scalyr agent..."
-sudo apt install scalyr-agent-2-aio
+echo "[INFO] Installing Scalyr agent (aio version)..."
+sudo apt-get install -y scalyr-agent-2-aio
 
-# ---- DOWNLOAD CONFIG ----
+# ---- DOWNLOAD REAL CONFIG ----
 echo "[INFO] Downloading Scalyr config from GitHub..."
 curl -sL -o scalyr_agent.json "$CONFIG_URL"
 
-# ---- APPLY CONFIG ----
+# ---- APPLY REAL CONFIG ----
 echo "[INFO] Applying config to /etc/scalyr-agent-2/agent.json..."
-sudo mv agent.json /etc/scalyr-agent-2/agent.json
+sudo mv scalyr_agent.json /etc/scalyr-agent-2/agent.json
 sudo chown root:root /etc/scalyr-agent-2/agent.json
 sudo chmod 644 /etc/scalyr-agent-2/agent.json
 
 # ---- RESTART AGENT ----
 echo "[INFO] Restarting Scalyr agent..."
-sudo scalyr-agent-2 restart
+sudo systemctl restart scalyr-agent-2
 
 echo "[SUCCESS] Scalyr agent installed and configured!"
