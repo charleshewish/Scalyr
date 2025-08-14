@@ -12,7 +12,7 @@ echo "[INFO] Updating package list..."
 sudo apt-get update -y
 
 echo "[INFO] Installing Scalyr agent..."
-sudo apt-get install -y scalyr-agent-2
+sudo apt install scalyr-agent-2-aio
 
 # ---- DOWNLOAD CONFIG ----
 echo "[INFO] Downloading Scalyr config from GitHub..."
