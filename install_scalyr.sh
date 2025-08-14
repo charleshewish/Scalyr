@@ -1,38 +1,42 @@
-#!/bin/bash
-# install_scalyr.sh
-# Automates Scalyr agent installation + config deployment
+#!/usr/bin/env bash
+# install_scalyr.sh — pre-seed agent.json, then install scalyr-agent-2-aio
 
-set -e  # exit if any command fails
+set -euo pipefail
 
-# ---- USER VARIABLES ----
 CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/tree/Linux/agent.json"
 
-# ---- CREATE TEMP CONFIG BEFORE INSTALL ----
-echo "[INFO] Creating temporary config so install doesn't fail..."
-sudo mkdir -p /etc/scalyr-agent-2
-echo '{}' | sudo tee /etc/scalyr-agent-2/agent.json >/dev/null
-sudo chown root:root /etc/scalyr-agent-2/agent.json
-sudo chmod 644 /etc/scalyr-agent-2/agent.json
+PKG="scalyr-agent-2-aio"
+SERVICE="scalyr-agent-2"
+CONF_DIR="/etc/scalyr-agent-2"
+CONF_FILE="${CONF_DIR}/agent.json"
 
-# ---- UPDATE & INSTALL SCALYR AGENT ----
-echo "[INFO] Updating package list..."
+echo "[INFO] Updating apt cache and ensuring curl is available..."
 sudo apt-get update -y
+sudo apt-get install -y curl ca-certificates
 
-echo "[INFO] Installing Scalyr agent (aio version)..."
-sudo apt-get install -y scalyr-agent-2-aio
+echo "[INFO] Downloading agent config from GitHub FIRST..."
+TMP_CONF="$(mktemp)"
+curl -fsSL "$CONFIG_URL" -o "$TMP_CONF"
 
-# ---- DOWNLOAD REAL CONFIG ----
-echo "[INFO] Downloading Scalyr config from GitHub..."
-curl -sL -o scalyr_agent.json "$CONFIG_URL"
+# (Optional) very light sanity check that we didn't fetch an HTML error page
+if ! head -c 1 "$TMP_CONF" | grep -q '{'; then
+  echo "[ERROR] Downloaded file doesn't look like JSON. Check CONFIG_URL." >&2
+  exit 1
+fi
 
-# ---- APPLY REAL CONFIG ----
-echo "[INFO] Applying config to /etc/scalyr-agent-2/agent.json..."
-sudo mv scalyr_agent.json /etc/scalyr-agent-2/agent.json
-sudo chown root:root /etc/scalyr-agent-2/agent.json
-sudo chmod 644 /etc/scalyr-agent-2/agent.json
+echo "[INFO] Pre-creating ${CONF_DIR} and placing config before package install..."
+sudo mkdir -p "$CONF_DIR"
+# install sets owner+mode atomically
+sudo install -o root -g root -m 600 "$TMP_CONF" "$CONF_FILE"
+rm -f "$TMP_CONF"
 
-# ---- RESTART AGENT ----
-echo "[INFO] Restarting Scalyr agent..."
-sudo systemctl restart scalyr-agent-2
+echo "[INFO] Installing ${PKG}..."
+sudo apt-get install -y "$PKG"
 
-echo "[SUCCESS] Scalyr agent installed and configured!"
+echo "[INFO] Enabling/restarting service..."
+# In case enable fails because it's already enabled, try restart
+if ! sudo systemctl enable --now "$SERVICE"; then
+  sudo systemctl restart "$SERVICE"
+fi
+
+echo "[SUCCESS] Scalyr agent installed and using ${CONF_FILE}"
