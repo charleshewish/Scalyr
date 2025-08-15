@@ -69,7 +69,7 @@ RUN_USER=$(logname 2>/dev/null || echo "$USER")
 sudo usermod -a -G scalyr-agent "$RUN_USER"
 
 # ===== CONFIG =====
-CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/main/agent.json"
+CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Linux/agent.json"
 CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 
 echo "[INFO] Downloading agent.json from GitHub..."
