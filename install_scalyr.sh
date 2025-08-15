@@ -3,47 +3,27 @@
 
 set -euo pipefail
 
-# ===== USER VARIABLES =====
-CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/tree/Linux/agent.json"
-PKG="scalyr-agent-2-aio"
-SERVICE="scalyr-agent-2"
-CONF_DIR="/etc/scalyr-agent-2"
-CONF_FILE="${CONF_DIR}/agent.json"
-
 # ===== PREP =====
 echo "[INFO] Updating apt cache and ensuring curl is available..."
 sudo apt-get update -y
-sudo apt-get install -y curl ca-certificates
+sudo apt-get install -y curl ca-certificates scalyr-agent-2-aio
 
-# ===== PREVENT SERVICE AUTO-START =====
-echo "[INFO] Temporarily disabling $SERVICE so it doesn't start during package install..."
-sudo systemctl mask "$SERVICE" || true
+# ===== CONFIG =====
+CONFIG_URL="https://raw.githubusercontent.com/USERNAME/REPO/BRANCH/agent.json"
+CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 
-# ===== INSTALL PACKAGE =====
-echo "[INFO] Installing $PKG..."
-sudo apt-get install -y "$PKG"
+echo "[INFO] Downloading agent.json from GitHub..."
+sudo curl -fsSL "$CONFIG_URL" -o "$CONFIG_PATH"
 
-# ===== FETCH CONFIG FROM GITHUB =====
-echo "[INFO] Downloading agent config from GitHub..."
-TMP_CONF="$(mktemp)"
-curl -fsSL "$CONFIG_URL" -o "$TMP_CONF"
+# Detect the non-root user running the script
+RUN_USER=$(logname 2>/dev/null || echo "$USER")
 
-# Basic sanity check
-if ! head -c 1 "$TMP_CONF" | grep -q '{'; then
-  echo "[ERROR] Downloaded file doesn't look like JSON. Check CONFIG_URL." >&2
-  rm -f "$TMP_CONF"
-  exit 1
-fi
+echo "[INFO] Setting ownership of agent.json for $RUN_USER..."
+sudo chown "$RUN_USER":"$RUN_USER" "$CONFIG_PATH"
 
-# ===== PLACE CONFIG =====
-echo "[INFO] Applying config to $CONF_FILE..."
-sudo mkdir -p "$CONF_DIR"
-sudo install -o root -g root -m 640 "$TMP_CONF" "$CONF_FILE"
-rm -f "$TMP_CONF"
+# ===== RESTART AGENT =====
+echo "[INFO] Restarting Scalyr Agent..."
+sudo scalyr-agent-2 stop || true
+sudo scalyr-agent-2 start
 
-# ===== ENABLE & START SERVICE =====
-echo "[INFO] Re-enabling and starting $SERVICE..."
-sudo systemctl unmask "$SERVICE"
-sudo systemctl enable --now "$SERVICE"
-
-echo "[SUCCESS] $PKG installed and configured using $CONF_FILE"
+echo "[INFO] Installation complete!"
