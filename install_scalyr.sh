@@ -9,7 +9,7 @@ sudo apt-get update -y
 sudo apt-get install -y curl ca-certificates scalyr-agent-2-aio
 
 # ===== CONFIG =====
-CONFIG_URL="https://raw.githubusercontent.com/USERNAME/REPO/BRANCH/agent.json"
+CONFIG_URL="https://raw.githubusercontent.com/charleshewish/Scalyr/Linux/agent.json"
 CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 
 echo "[INFO] Downloading agent.json from GitHub..."
