@@ -1,7 +1,10 @@
 {
+  "api_key": "0USmRJ/VV/f9GxRU4AqkO_bojE9LeDVgw9NQ18HuSXe4-",
+  "scalyr_server": "https://xdr.eu1.sentinelone.net"
+},
+{
   "server_attributes": {
   },
-  "api_key": "0USmRJ/VV/f9GxRU4AqkO_bojE9LeDVgw9NQ18HuSXe4-",
   "log_paths": [
     "/var/log/syslog",
     "/var/log/auth.log",
@@ -25,4 +28,5 @@
   ],
   "implicit_metric_monitor": true,
   "implicit_agent_process_metrics_monitor": true
+
 }
