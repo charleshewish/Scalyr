@@ -7,8 +7,9 @@ function Install-Scalyr {
         [string]$ConfigFile
     )
 
-    $msiPath    = "$env:TEMP\ScalyrAgentInstaller.msi"
-    $configUrl  = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
+    $msiUrl    = "https://app.scalyr.com/scalyr-repo/stable/latest/ScalyrAgentInstaller-2.2.18.msi"
+    $msiPath   = "$env:TEMP\ScalyrAgentInstaller.msi"
+    $configUrl = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
     $configPath = "C:\Program Files (x86)\Scalyr\config\agent.json"
     $serviceName = "ScalyrAgent"
 
@@ -17,7 +18,7 @@ function Install-Scalyr {
 
     if (-not $service) {
         Write-Host "Scalyr Agent not detected. Installing..."
-        Invoke-WebRequest -Uri "https://www.scalyr.com/scalyr-agent-2/latest/ScalyrAgentInstaller.msi" -OutFile $msiPath
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath
         Start-Process msiexec.exe -ArgumentList '/i',$msiPath,'/qn' -Wait
     } else {
         Write-Host "Scalyr Agent already installed. Skipping MSI installation."
