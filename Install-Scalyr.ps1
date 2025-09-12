@@ -28,14 +28,19 @@ function Install-Scalyr {
     $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
     $config = $config -replace 'API_KEY_PLACEHOLDER',$ApiKey
 
-    # Write config
-    Set-Content -Path $configPath -Value $config -Encoding UTF8
+    # Write config AS SYSTEM using PsExec
+    $psexecPath = "$env:TEMP\PsExec.exe"
+    if (-not (Test-Path $psexecPath)) {
+        Write-Host "Downloading PsExec..."
+        Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile "$env:TEMP\PSTools.zip"
+        Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath "$env:TEMP" -Force
+    }
 
-    # Ensure SYSTEM has full control (so the agent service can read it)
-    $acl = Get-Acl $configPath
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM","FullControl","Allow")
-    $acl.SetAccessRule($rule)
-    Set-Acl $configPath $acl
+    Write-Host "Writing agent.json as SYSTEM..."
+    $tempFile = "$env:TEMP\agent_temp.json"
+    Set-Content -Path $tempFile -Value $config -Encoding UTF8
+    Start-Process -FilePath $psexecPath -ArgumentList "-s -accepteula cmd /c copy `"$tempFile`" `"$configPath`"" -Wait
+    Remove-Item $tempFile -Force
 
     Write-Host "Restarting Scalyr Agent service..."
     if (-not $service) { $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue }
