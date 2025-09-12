@@ -1,5 +1,5 @@
 {
-  api_key: "0USmRJ/VV/f9GxRU4AqkO_bojE9LeDVgw9NQ18HuSXe4-",
+  api_key: "API_KEY_PLACEHOLDER",
 "scalyr_server": "https://xdr.eu1.sentinelone.net",
   server_attributes: {
   }
@@ -21,3 +21,4 @@ monitors: [
   }
 ]
 }
+
