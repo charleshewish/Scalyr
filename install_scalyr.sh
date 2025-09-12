@@ -2,6 +2,15 @@
 # install_scalyr.sh — Install scalyr-agent-2-aio with config from GitHub (avoids install-time API key validation)
 
 set -euo pipefail
+# ===== INPUT CHECK =====
+if [ $# -lt 1 ]; then
+    echo "[ERROR] Missing required argument: API_KEY"
+    echo "Usage: $0 <API_KEY> [SCALYR_SERVER]"
+    exit 1
+fi
+
+API_KEY="$1"
+SCALYR_SERVER="${2:-https://xdr.eu1.sentinelone.net}"   # optional override, defaults to 
 
 # ===== PREP =====
 echo "[INFO] Updating apt cache and ensuring curl and gpg are available..."
@@ -74,6 +83,12 @@ CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 
 echo "[INFO] Downloading agent.json from GitHub..."
 sudo curl -fsSL "$CONFIG_URL" -o "$CONFIG_PATH"
+
+echo "[INFO] Replacing API_KEY placeholder with provided key..."
+sudo sed -i "s/API_KEY_PLACEHOLDER/${API_KEY}/g" "$CONFIG_PATH"
+
+echo "[INFO] Replacing SCALYR_SERVER placeholder with provided server..."
+sudo sed -i "s#SCALYR_SERVER_PLACEHOLDER#${SCALYR_SERVER}#g" "$CONFIG_PATH"
 
 echo "[INFO] Setting proper ownership and permissions for agent.json..."
 sudo chown scalyr-agent:scalyr-agent "$CONFIG_PATH"
