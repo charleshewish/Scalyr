@@ -7,7 +7,7 @@ param (
 )
 
 $msiPath   = "$env:TEMP\ScalyrAgentInstaller.msi"
-$configUrl = "https://raw.githubusercontent.com/charleshewish/Scalyr/Windows/$ConfigFile"
+$configUrl = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
 $configPath = "C:\Program Files (x86)\Scalyr\config\agent.json"
 
 Write-Host "Downloading Scalyr Agent installer..."
