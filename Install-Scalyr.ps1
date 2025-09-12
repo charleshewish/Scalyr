@@ -8,7 +8,7 @@ function Install-Scalyr {
     )
 
     $msiPath    = "$env:TEMP\ScalyrAgentInstaller.msi"
-    $configUrl  = "https://raw.githubusercontent.com/YOUR_GITHUB_USER/YOUR_REPO/main/$ConfigFile"
+    $configUrl  = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
     $configPath = "C:\Program Files (x86)\Scalyr\config\agent.json"
     $serviceName = "ScalyrAgent"
 
