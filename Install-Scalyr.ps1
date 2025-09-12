@@ -28,19 +28,26 @@ function Install-Scalyr {
     $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
     $config = $config -replace 'API_KEY_PLACEHOLDER',$ApiKey
 
-    # Write config AS SYSTEM using PsExec
-    $psexecPath = "$env:TEMP\PsExec.exe"
-    if (-not (Test-Path $psexecPath)) {
-        Write-Host "Downloading PsExec..."
-        Invoke-WebRequest -Uri "https://download.sysinternals.com/files/PSTools.zip" -OutFile "$env:TEMP\PSTools.zip"
-        Expand-Archive -Path "$env:TEMP\PSTools.zip" -DestinationPath "$env:TEMP" -Force
-    }
+    # Write config as SYSTEM using a temporary scheduled task
+$tempScript = "$env:TEMP\WriteAgentConfig.ps1"
+$scheduledTaskName = "WriteScalyrConfigTemp"
 
-    Write-Host "Writing agent.json as SYSTEM..."
-    $tempFile = "$env:TEMP\agent_temp.json"
-    Set-Content -Path $tempFile -Value $config -Encoding UTF8
-    Start-Process -FilePath $psexecPath -ArgumentList "-s -accepteula cmd /c copy `"$tempFile`" `"$configPath`"" -Wait
-    Remove-Item $tempFile -Force
+# Save a small script to write the config
+Set-Content -Path $tempScript -Value @"
+Set-Content -Path '$configPath' -Value @'
+$config
+'@ -Encoding UTF8
+"@
+
+# Create scheduled task to run as SYSTEM once
+schtasks /create /tn $scheduledTaskName /tr "powershell.exe -ExecutionPolicy Bypass -File `"$tempScript`"" /sc once /st 00:00 /RL HIGHEST /F
+schtasks /run /tn $scheduledTaskName
+
+# Cleanup
+Start-Sleep -Seconds 5
+schtasks /delete /tn $scheduledTaskName /f
+Remove-Item $tempScript -Force
+
 
     Write-Host "Restarting Scalyr Agent service..."
     if (-not $service) { $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue }
