@@ -28,8 +28,14 @@ function Install-Scalyr {
     $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
     $config = $config -replace 'API_KEY_PLACEHOLDER',$ApiKey
 
-    Write-Host "Writing config to $configPath"
+    # Write config
     Set-Content -Path $configPath -Value $config -Encoding UTF8
+
+    # Ensure SYSTEM has full control (so the agent service can read it)
+    $acl = Get-Acl $configPath
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM","FullControl","Allow")
+    $acl.SetAccessRule($rule)
+    Set-Acl $configPath $acl
 
     Write-Host "Restarting Scalyr Agent service..."
     if (-not $service) { $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue }
