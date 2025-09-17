@@ -1,3 +1,18 @@
+function Install-Scalyr {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ApiKey,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ConfigFile
+    )
+
+    $msiUrl       = "https://app.scalyr.com/scalyr-repo/stable/latest/ScalyrAgentInstaller-2.2.18.msi"
+    $msiPath      = "$env:TEMP\ScalyrAgentInstaller.msi"
+    $configUrl    = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
+    $configPath   = "C:\Program Files (x86)\Scalyr\config\agent.json"
+    $serviceName  = "ScalyrAgent"
+    
 # Check if agent is installed
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if (-not $service) {
