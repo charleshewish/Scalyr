@@ -24,13 +24,13 @@ function Install-Scalyr {
     }
 
     # Fetch config file from GitHub
-    Write-Host "[INFO] Fetching config $ConfigFile from GitHub..."
-    $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
-    $config = $config -replace 'API_KEY_PLACEHOLDER', $ApiKey
+   # Write-Host "[INFO] Fetching config $ConfigFile from GitHub..."
+    #$config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
+   # $config = $config -replace 'API_KEY_PLACEHOLDER', $ApiKey
 
     # Overwrite contents of agent.json while preserving ownership
-    Write-Host "[INFO] Updating agent.json contents..."
-    Set-Content -Path $configPath -Value $config -Encoding UTF8 -Force
+   # Write-Host "[INFO] Updating agent.json contents..."
+   # Set-Content -Path $configPath -Value $config -Encoding UTF8 -Force
 
     # Restart service
     Write-Host "[INFO] Restarting Scalyr Agent service..."
