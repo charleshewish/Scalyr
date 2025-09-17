@@ -30,7 +30,7 @@ function Install-Scalyr {
 
 
 Write-Host "[INFO] Overwriting agent.json contents without replacing the file..."
-$config | Set-Content -Path $configPath -Encoding UTF8
+$config | Set-Content -Path $configPath -Encoding Ascii
 
 
     # Restart service
