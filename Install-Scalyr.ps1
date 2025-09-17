@@ -11,7 +11,7 @@ function Install-Scalyr {
     $msiPath      = "$env:TEMP\ScalyrAgentInstaller.msi"
     $configUrl    = "https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Windows/$ConfigFile"
     $configPath   = "C:\Program Files (x86)\Scalyr\config\agent.json"
-    $serviceName  = "ScalyrAgent"
+    $serviceName  = "Scalyr Agent Service"
     
     # Check if agent is installed
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -28,12 +28,10 @@ function Install-Scalyr {
     $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
     $config = $config -replace 'API_KEY_PLACEHOLDER', $ApiKey
 
-    Write-Host "[INFO] Updating agent.json contents safely..."
 
-    # Open the existing file for writing, overwrite contents, but preserve ownership
-    $writer = [System.IO.StreamWriter]::new($configPath, $false, [System.Text.Encoding]::UTF8)
-    $writer.Write($config)
-    $writer.Close()
+Write-Host "[INFO] Overwriting agent.json contents without replacing the file..."
+$config | Set-Content -Path $configPath -Encoding UTF8
+
 
     # Restart service
     Write-Host "[INFO] Restarting Scalyr Agent service..."
