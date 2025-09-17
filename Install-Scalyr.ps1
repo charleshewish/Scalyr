@@ -13,7 +13,7 @@ function Install-Scalyr {
     $configPath   = "C:\Program Files (x86)\Scalyr\config\agent.json"
     $serviceName  = "ScalyrAgent"
     
-# Check if agent is installed
+    # Check if agent is installed
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if (-not $service) {
         Write-Host "[INFO] Scalyr Agent not detected. Installing..."
@@ -23,14 +23,17 @@ function Install-Scalyr {
         Write-Host "[INFO] Scalyr Agent already installed. Skipping MSI installation."
     }
 
-    # Fetch config file from GitHub
-   # Write-Host "[INFO] Fetching config $ConfigFile from GitHub..."
-    #$config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
-   # $config = $config -replace 'API_KEY_PLACEHOLDER', $ApiKey
+    Fetch config file from GitHub
+    Write-Host "[INFO] Fetching config $ConfigFile from GitHub..."
+    $config = Invoke-WebRequest -Uri $configUrl | Select-Object -ExpandProperty Content
+    $config = $config -replace 'API_KEY_PLACEHOLDER', $ApiKey
 
-    # Overwrite contents of agent.json while preserving ownership
-   # Write-Host "[INFO] Updating agent.json contents..."
-   # Set-Content -Path $configPath -Value $config -Encoding UTF8 -Force
+    Write-Host "[INFO] Updating agent.json contents safely..."
+
+    # Open the existing file for writing, overwrite contents, but preserve ownership
+    $writer = [System.IO.StreamWriter]::new($configPath, $false, [System.Text.Encoding]::UTF8)
+    $writer.Write($config)
+    $writer.Close()
 
     # Restart service
     Write-Host "[INFO] Restarting Scalyr Agent service..."
