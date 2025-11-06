@@ -26,6 +26,13 @@ monitors: [
           log_all_lines: "True"
           max_characters: "10000"
           sample_interval: 60
-     }
+     },
+ {
+      module: "scalyr_agent.builtin_monitors.syslog_monitor",
+      protocols: "tcp:601, udp:514",
+      accept_remote_connections: true,
+      message_log: "TestAWS.log", 
+      parser: "marketplace_awscloudtrail"      
+    },
 ]
 }
