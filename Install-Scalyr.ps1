@@ -71,7 +71,7 @@ if ($configContent -notmatch [regex]::Escape($ApiPlaceholder)) {
     throw "Placeholder '$ApiPlaceholder' not found in $ConfigFile. Verify the config template is correct."
 }
 $configContent = $configContent -replace [regex]::Escape($ApiPlaceholder), $ApiToken
-Set-Content -Path $TempConfigPath -Value $configContent -Encoding UTF8
+[System.IO.File]::WriteAllText($TempConfigPath, $configContent, [System.Text.UTF8Encoding]::new($false))
 Write-Success "API key injected successfully."
 
 # Step 5: Replace the default agent.json with the downloaded config
