@@ -80,16 +80,45 @@ if (-not (Test-Path $AgentConfigDir)) {
     throw "Scalyr config directory not found at '$AgentConfigDir'. Installation may have failed or used a different path."
 }
 Copy-Item -Path $TempConfigPath -Destination $AgentConfigDst -Force
-Write-Success "agent.json replaced successfully."
 
-# Step 6: Restart the Scalyr Agent service to apply config
-Write-Step "Restarting Scalyr Agent service..."
-$service = Get-Service -Name "ScalyrAgent" -ErrorAction SilentlyContinue
+# Verify the file is fully written and the API key is present before proceeding
+Write-Step "Verifying agent.json was written correctly..."
+$retries = 0
+do {
+    Start-Sleep -Seconds 2
+    $written = Get-Content -Path $AgentConfigDst -Raw -ErrorAction SilentlyContinue
+    $retries++
+    if ($retries -gt 10) { throw "Timed out waiting for agent.json to be written correctly." }
+} until ($written -match [regex]::Escape($ApiToken))
+
+Write-Success "agent.json replaced and verified successfully."
+
+# Step 6: Start the Scalyr Agent service
+Write-Step "Starting Scalyr Agent service..."
+
+$serviceName = "ScalyrAgentService"
+$agentBin    = "C:\Program Files (x86)\Scalyr\bin\ScalyrAgentService.exe"
+
+$service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
 if ($null -eq $service) {
-    Write-Warning "Scalyr Agent service not found. You may need to restart it manually."
+    # Fallback: start directly via binary if service entry is missing
+    if (Test-Path $agentBin) {
+        Write-Step "Service entry not found, starting via binary: $agentBin"
+        Start-Process -FilePath $agentBin -ArgumentList "start" -Wait -NoNewWindow
+        Write-Success "Scalyr Agent started via binary."
+    } else {
+        throw "Service '$serviceName' not found and binary not present at '$agentBin'. Check install log at $TempDir\scalyr_install.log"
+    }
 } else {
-    Restart-Service -Name "ScalyrAgent" -Force
-    Write-Success "Scalyr Agent service restarted."
+    Write-Step "Found service: '$serviceName' (Current state: $($service.Status))"
+    if ($service.Status -eq "Running") {
+        Restart-Service -Name $serviceName -Force
+        Write-Success "Scalyr Agent service restarted."
+    } else {
+        Start-Service -Name $serviceName
+        Write-Success "Scalyr Agent service started."
+    }
 }
 
 Write-Success "Scalyr Agent installation and configuration complete."
