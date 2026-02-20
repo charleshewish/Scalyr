@@ -68,18 +68,36 @@ else
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── CHECK / INSTALL PYTHON ───────────────────────────────────────────────────
+# ─── CHECK / INSTALL PYTHON + DEPENDENCIES ───────────────────────────────────
 step "Checking for Python..."
 if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
     step "Python not found, installing python3..."
     case "$PKG_MANAGER" in
-        apt) apt-get install -y python3 ;;
-        yum) yum install -y python3 ;;
-        dnf) dnf install -y python3 ;;
+        apt) apt-get install -y python3 python3-pip ;;
+        yum) yum install -y python3 python3-pip ;;
+        dnf) dnf install -y python3 python3-pip ;;
     esac
     success "Python3 installed."
 else
     success "Python already present."
+fi
+
+# Install the 'six' compatibility module required by the Scalyr agent
+step "Checking for Python 'six' module..."
+PYTHON_BIN=$(command -v python3 || command -v python)
+if ! "$PYTHON_BIN" -c "import six" &>/dev/null; then
+    step "'six' module not found, installing..."
+    case "$PKG_MANAGER" in
+        apt) apt-get install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
+        yum) yum install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
+        dnf) dnf install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
+    esac
+    # Verify it installed correctly
+    "$PYTHON_BIN" -c "import six" \
+        || error "Failed to install Python 'six' module. Try manually running: pip3 install six"
+    success "'six' module installed."
+else
+    success "'six' module already present."
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
