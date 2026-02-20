@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Install-Scalyr.sh
+# Downloads and installs the Scalyr Agent on Linux, applies a specified config,
+# and injects an API key.
+#
+# Usage:
+#   sudo bash Install-Scalyr.sh --api-token "YOUR_API_KEY" --config-file "Agent1.json"
+#
+# One-liner:
+#   curl -sO https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Linux/Install-Scalyr.sh && sudo bash Install-Scalyr.sh --api-token "YOUR_API_KEY" --config-file "Agent1.json"
+# =============================================================================
+
+set -euo pipefail
+
+# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Linux"
+SCALYR_SERVER="https://xdr.eu1.sentinelone.net"
+AGENT_CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
+API_PLACEHOLDER="API_KEY_PLACEHOLDER"
+TEMP_DIR=$(mktemp -d)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── COLOURS ──────────────────────────────────────────────────────────────────
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+step()    { echo -e "${CYAN}[*] $1${NC}"; }
+success() { echo -e "${GREEN}[+] $1${NC}"; }
+error()   { echo -e "${RED}[!] $1${NC}" >&2; exit 1; }
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── ARGUMENT PARSING ─────────────────────────────────────────────────────────
+API_TOKEN=""
+CONFIG_FILE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --api-token)   API_TOKEN="$2";   shift 2 ;;
+        --config-file) CONFIG_FILE="$2"; shift 2 ;;
+        *) error "Unknown argument: $1. Usage: $0 --api-token TOKEN --config-file Agent1.json" ;;
+    esac
+done
+
+[[ -z "$API_TOKEN" ]]   && error "--api-token is required."
+[[ -z "$CONFIG_FILE" ]] && error "--config-file is required."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── ROOT CHECK ───────────────────────────────────────────────────────────────
+[[ "$EUID" -ne 0 ]] && error "This script must be run as root. Use: sudo bash $0"
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── DETECT PACKAGE MANAGER ───────────────────────────────────────────────────
+step "Detecting Linux distribution..."
+if command -v apt-get &>/dev/null; then
+    PKG_MANAGER="apt"
+    success "Detected Debian/Ubuntu (apt)"
+elif command -v yum &>/dev/null; then
+    PKG_MANAGER="yum"
+    success "Detected RHEL/CentOS (yum)"
+elif command -v dnf &>/dev/null; then
+    PKG_MANAGER="dnf"
+    success "Detected RHEL/CentOS (dnf)"
+else
+    error "Unsupported distribution. Could not find apt, yum, or dnf."
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── CHECK / INSTALL PYTHON ───────────────────────────────────────────────────
+step "Checking for Python..."
+if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
+    step "Python not found, installing python3..."
+    case "$PKG_MANAGER" in
+        apt) apt-get install -y python3 ;;
+        yum) yum install -y python3 ;;
+        dnf) dnf install -y python3 ;;
+    esac
+    success "Python3 installed."
+else
+    success "Python already present."
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 1: DOWNLOAD INSTALLER ───────────────────────────────────────────────
+step "Downloading Scalyr install script..."
+curl -sO https://www.scalyr.com/install-agent.sh \
+    || error "Failed to download install-agent.sh. Check network connectivity."
+success "Installer downloaded."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 2: RUN INSTALLER ────────────────────────────────────────────────────
+step "Installing Scalyr Agent with API key..."
+bash ./install-agent.sh --set-api-key "$API_TOKEN" \
+    || error "Scalyr Agent installation failed."
+success "Scalyr Agent installed successfully."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 3: SET SCALYR SERVER ────────────────────────────────────────────────
+step "Setting Scalyr server to: $SCALYR_SERVER"
+scalyr-agent-2-config --set-scalyr-server "$SCALYR_SERVER" \
+    || error "Failed to set scalyr-server. Check that the agent installed correctly."
+success "Scalyr server set."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 4: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
+CONFIG_URL="$GITHUB_RAW_BASE/$CONFIG_FILE"
+TEMP_CONFIG="$TEMP_DIR/$CONFIG_FILE"
+
+step "Downloading config '$CONFIG_FILE' from: $CONFIG_URL"
+curl -sf "$CONFIG_URL" -o "$TEMP_CONFIG" \
+    || error "Failed to download '$CONFIG_FILE' from GitHub. Check the filename and repo."
+success "Config downloaded to: $TEMP_CONFIG"
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 5: INJECT API KEY ───────────────────────────────────────────────────
+step "Injecting API key into config..."
+if ! grep -q "$API_PLACEHOLDER" "$TEMP_CONFIG"; then
+    error "Placeholder '$API_PLACEHOLDER' not found in $CONFIG_FILE. Verify the config template."
+fi
+# Use a delimiter unlikely to appear in an API key
+sed -i "s|$API_PLACEHOLDER|$API_TOKEN|g" "$TEMP_CONFIG"
+success "API key injected."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 6: REPLACE AGENT CONFIG ────────────────────────────────────────────
+step "Replacing agent.json at: $AGENT_CONFIG_PATH"
+AGENT_CONFIG_DIR=$(dirname "$AGENT_CONFIG_PATH")
+[[ ! -d "$AGENT_CONFIG_DIR" ]] && error "Scalyr config directory not found at '$AGENT_CONFIG_DIR'. Installation may have failed."
+
+cp "$TEMP_CONFIG" "$AGENT_CONFIG_PATH" \
+    || error "Failed to copy config to $AGENT_CONFIG_PATH."
+
+# Ensure correct ownership for the Scalyr service user
+chown root:root "$AGENT_CONFIG_PATH"
+chmod 640 "$AGENT_CONFIG_PATH"
+success "agent.json replaced with correct permissions."
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 7: RESTART AGENT ────────────────────────────────────────────────────
+step "Restarting Scalyr Agent service..."
+if command -v systemctl &>/dev/null; then
+    systemctl restart scalyr-agent-2 \
+        || error "Failed to restart scalyr-agent-2 via systemctl."
+    success "Scalyr Agent restarted via systemctl."
+else
+    service scalyr-agent-2 restart \
+        || error "Failed to restart scalyr-agent-2 via service."
+    success "Scalyr Agent restarted via service."
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── CLEANUP ──────────────────────────────────────────────────────────────────
+rm -rf "$TEMP_DIR" ./install-agent.sh
+# ──────────────────────────────────────────────────────────────────────────────
+
+success "Scalyr Agent installation and configuration complete."
