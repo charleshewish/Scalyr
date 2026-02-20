@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Install-Scalyr.sh
-# Downloads and installs the Scalyr Agent on Linux, applies a specified config,
-# and injects an API key.
+# Downloads and installs the Scalyr Agent (AIO) on Linux, applies a specified
+# config, and injects an API key.
+#
+# Uses scalyr-agent-2-aio which bundles its own Python runtime, avoiding
+# system Python and dependency issues entirely.
 #
 # Usage:
 #   sudo bash Install-Scalyr.sh --api-token "YOUR_API_KEY" --config-file "Agent1.json"
@@ -57,62 +60,39 @@ step "Detecting Linux distribution..."
 if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt"
     success "Detected Debian/Ubuntu (apt)"
-elif command -v yum &>/dev/null; then
-    PKG_MANAGER="yum"
-    success "Detected RHEL/CentOS (yum)"
 elif command -v dnf &>/dev/null; then
     PKG_MANAGER="dnf"
     success "Detected RHEL/CentOS (dnf)"
+elif command -v yum &>/dev/null; then
+    PKG_MANAGER="yum"
+    success "Detected RHEL/CentOS (yum)"
 else
     error "Unsupported distribution. Could not find apt, yum, or dnf."
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── CHECK / INSTALL PYTHON + DEPENDENCIES ───────────────────────────────────
-step "Checking for Python..."
-if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
-    step "Python not found, installing python3..."
-    case "$PKG_MANAGER" in
-        apt) apt-get install -y python3 python3-pip ;;
-        yum) yum install -y python3 python3-pip ;;
-        dnf) dnf install -y python3 python3-pip ;;
-    esac
-    success "Python3 installed."
-else
-    success "Python already present."
-fi
-
-# Install the 'six' compatibility module required by the Scalyr agent
-step "Checking for Python 'six' module..."
-PYTHON_BIN=$(command -v python3 || command -v python)
-if ! "$PYTHON_BIN" -c "import six" &>/dev/null; then
-    step "'six' module not found, installing..."
-    case "$PKG_MANAGER" in
-        apt) apt-get install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
-        yum) yum install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
-        dnf) dnf install -y python3-six 2>/dev/null || pip3 install six --quiet ;;
-    esac
-    # Verify it installed correctly
-    "$PYTHON_BIN" -c "import six" \
-        || error "Failed to install Python 'six' module. Try manually running: pip3 install six"
-    success "'six' module installed."
-else
-    success "'six' module already present."
-fi
+# ─── STEP 1: INSTALL PREREQUISITES ───────────────────────────────────────────
+# gnupg and curl are required by the Scalyr installer for repo key handling
+step "Installing prerequisites (gnupg, curl)..."
+case "$PKG_MANAGER" in
+    apt) apt-get install -y gnupg curl ;;
+    yum) yum install -y gnupg curl ;;
+    dnf) dnf install -y gnupg curl ;;
+esac
+success "Prerequisites installed."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 1: DOWNLOAD INSTALLER ───────────────────────────────────────────────
+# ─── STEP 2: INSTALL SCALYR AGENT (AIO) ──────────────────────────────────────
+# scalyr-agent-2-aio bundles its own Python runtime - no system Python needed
 step "Downloading Scalyr install script..."
 curl -sO https://www.scalyr.com/install-agent.sh \
     || error "Failed to download install-agent.sh. Check network connectivity."
 success "Installer downloaded."
-# ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 2: RUN INSTALLER ────────────────────────────────────────────────────
-step "Installing Scalyr Agent with API key..."
-bash ./install-agent.sh --set-api-key "$API_TOKEN" \
-    || error "Scalyr Agent installation failed."
-success "Scalyr Agent installed successfully."
+step "Installing Scalyr Agent (AIO) with API key..."
+bash ./install-agent.sh --set-api-key "$API_TOKEN" --package-type aio \
+    || error "Scalyr Agent installation failed. Check /tmp/scalyr_install.log for details."
+success "Scalyr Agent (AIO) installed successfully."
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── STEP 3: SET SCALYR SERVER ────────────────────────────────────────────────
@@ -137,7 +117,6 @@ step "Injecting API key into config..."
 if ! grep -q "$API_PLACEHOLDER" "$TEMP_CONFIG"; then
     error "Placeholder '$API_PLACEHOLDER' not found in $CONFIG_FILE. Verify the config template."
 fi
-# Use a delimiter unlikely to appear in an API key
 sed -i "s|$API_PLACEHOLDER|$API_TOKEN|g" "$TEMP_CONFIG"
 success "API key injected."
 # ──────────────────────────────────────────────────────────────────────────────
@@ -150,7 +129,6 @@ AGENT_CONFIG_DIR=$(dirname "$AGENT_CONFIG_PATH")
 cp "$TEMP_CONFIG" "$AGENT_CONFIG_PATH" \
     || error "Failed to copy config to $AGENT_CONFIG_PATH."
 
-# Ensure correct ownership for the Scalyr service user
 chown root:root "$AGENT_CONFIG_PATH"
 chmod 640 "$AGENT_CONFIG_PATH"
 success "agent.json replaced with correct permissions."
