@@ -15,7 +15,6 @@ set -euo pipefail
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/charleshewish/Scalyr/refs/heads/Linux"
-SCALYR_SERVER="https://xdr.eu1.sentinelone.net"
 AGENT_CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 API_PLACEHOLDER="API_KEY_PLACEHOLDER"
 TEMP_DIR=$(mktemp -d)
@@ -136,14 +135,7 @@ fi
 success "Scalyr Agent (AIO) installed successfully."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 4: SET SCALYR SERVER ───────────────────────────────────────────────
-step "Setting Scalyr server to: $SCALYR_SERVER"
-scalyr-agent-2-config --set-scalyr-server "$SCALYR_SERVER" \
-    || error "Failed to set scalyr-server."
-success "Scalyr server configured."
-# ──────────────────────────────────────────────────────────────────────────────
-
-# ─── STEP 5: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
+# ─── STEP 4: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
 CONFIG_URL="$GITHUB_RAW_BASE/$CONFIG_FILE"
 TEMP_CONFIG="$TEMP_DIR/$CONFIG_FILE"
 
