@@ -79,7 +79,20 @@ esac
 success "Prerequisites installed."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 2: ADD SCALYR REPO AND INSTALL AIO PACKAGE DIRECTLY ────────────────
+# ─── STEP 2: CLEAN UP ANY BROKEN EXISTING INSTALLATION ──────────────────────
+step "Checking for existing Scalyr packages..."
+if dpkg -l scalyr-agent-2 2>/dev/null | grep -qE '^[iuph]'; then
+    step "Found existing scalyr-agent-2 install, removing before installing AIO..."
+    dpkg --remove --force-remove-reinstreq scalyr-agent-2 2>/dev/null || true
+    apt-get purge -y scalyr-agent-2 2>/dev/null || true
+    apt-get install -f -y 2>/dev/null || true
+    success "Existing package removed."
+else
+    success "No conflicting packages found."
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ─── STEP 3: ADD SCALYR REPO AND INSTALL AIO PACKAGE DIRECTLY ────────────────
 step "Installing Scalyr Agent (AIO)..."
 
 if [[ "$PKG_MANAGER" == "apt" ]]; then
@@ -123,16 +136,14 @@ fi
 success "Scalyr Agent (AIO) installed successfully."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 3: SET API KEY AND SCALYR SERVER ────────────────────────────────────
-step "Setting API key and Scalyr server..."
-scalyr-agent-2-config --set-api-key "$API_TOKEN" \
-    || error "Failed to set API key."
+# ─── STEP 4: SET SCALYR SERVER ───────────────────────────────────────────────
+step "Setting Scalyr server to: $SCALYR_SERVER"
 scalyr-agent-2-config --set-scalyr-server "$SCALYR_SERVER" \
     || error "Failed to set scalyr-server."
-success "API key and server configured."
+success "Scalyr server configured."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 4: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
+# ─── STEP 5: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
 CONFIG_URL="$GITHUB_RAW_BASE/$CONFIG_FILE"
 TEMP_CONFIG="$TEMP_DIR/$CONFIG_FILE"
 
@@ -142,7 +153,7 @@ curl -sf "$CONFIG_URL" -o "$TEMP_CONFIG" \
 success "Config downloaded."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 5: INJECT API KEY ───────────────────────────────────────────────────
+# ─── STEP 6: INJECT API KEY ───────────────────────────────────────────────────
 step "Injecting API key into config..."
 if ! grep -q "$API_PLACEHOLDER" "$TEMP_CONFIG"; then
     error "Placeholder '$API_PLACEHOLDER' not found in $CONFIG_FILE. Verify the config template."
@@ -151,7 +162,7 @@ sed -i "s|$API_PLACEHOLDER|$API_TOKEN|g" "$TEMP_CONFIG"
 success "API key injected."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 6: REPLACE AGENT CONFIG ────────────────────────────────────────────
+# ─── STEP 7: REPLACE AGENT CONFIG ────────────────────────────────────────────
 step "Replacing agent.json at: $AGENT_CONFIG_PATH"
 AGENT_CONFIG_DIR=$(dirname "$AGENT_CONFIG_PATH")
 [[ ! -d "$AGENT_CONFIG_DIR" ]] && error "Scalyr config directory not found at '$AGENT_CONFIG_DIR'. Installation may have failed."
@@ -164,7 +175,7 @@ chmod 640 "$AGENT_CONFIG_PATH"
 success "agent.json replaced with correct permissions."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 7: START AGENT ──────────────────────────────────────────────────────
+# ─── STEP 8: START AGENT ──────────────────────────────────────────────────────
 step "Starting Scalyr Agent service..."
 if command -v systemctl &>/dev/null; then
     systemctl enable scalyr-agent-2 --quiet
