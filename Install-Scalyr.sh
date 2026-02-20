@@ -150,6 +150,7 @@ step "Injecting API key into config..."
 if ! grep -q "$API_PLACEHOLDER" "$TEMP_CONFIG"; then
     error "Placeholder '$API_PLACEHOLDER' not found in $CONFIG_FILE. Verify the config template."
 fi
+sed -i '1s/^\xEF\xBB\xBF//' "$TEMP_CONFIG"
 sed -i "s|$API_PLACEHOLDER|$API_TOKEN|g" "$TEMP_CONFIG"
 success "API key injected."
 # ──────────────────────────────────────────────────────────────────────────────
