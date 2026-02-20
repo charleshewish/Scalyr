@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Install-Scalyr.sh
-# Downloads and installs the Scalyr Agent (AIO) on Linux, applies a specified
+# Installs the Scalyr Agent (AIO) directly via apt/yum, applies a specified
 # config, and injects an API key.
-#
-# Uses scalyr-agent-2-aio which bundles its own Python runtime, avoiding
-# system Python and dependency issues entirely.
 #
 # Usage:
 #   sudo bash Install-Scalyr.sh --api-token "YOUR_API_KEY" --config-file "Agent1.json"
@@ -22,6 +19,7 @@ SCALYR_SERVER="https://xdr.eu1.sentinelone.net"
 AGENT_CONFIG_PATH="/etc/scalyr-agent-2/agent.json"
 API_PLACEHOLDER="API_KEY_PLACEHOLDER"
 TEMP_DIR=$(mktemp -d)
+SCALYR_GPG_KEY_URL="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF70CEEDB4AD7B6C6"
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── COLOURS ──────────────────────────────────────────────────────────────────
@@ -72,7 +70,6 @@ fi
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── STEP 1: INSTALL PREREQUISITES ───────────────────────────────────────────
-# gnupg and curl are required by the Scalyr installer for repo key handling
 step "Installing prerequisites (gnupg, curl)..."
 case "$PKG_MANAGER" in
     apt) apt-get install -y gnupg curl ;;
@@ -82,24 +79,57 @@ esac
 success "Prerequisites installed."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 2: INSTALL SCALYR AGENT (AIO) ──────────────────────────────────────
-# scalyr-agent-2-aio bundles its own Python runtime - no system Python needed
-step "Downloading Scalyr install script..."
-curl -sO https://www.scalyr.com/install-agent.sh \
-    || error "Failed to download install-agent.sh. Check network connectivity."
-success "Installer downloaded."
+# ─── STEP 2: ADD SCALYR REPO AND INSTALL AIO PACKAGE DIRECTLY ────────────────
+step "Installing Scalyr Agent (AIO)..."
 
-step "Installing Scalyr Agent (AIO) with API key..."
-bash ./install-agent.sh --set-api-key "$API_TOKEN" --package-type aio \
-    || error "Scalyr Agent installation failed. Check /tmp/scalyr_install.log for details."
+if [[ "$PKG_MANAGER" == "apt" ]]; then
+    # Add Scalyr GPG key
+    curl -s "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF70CEEDB4AD7B6C6" \
+        | gpg --dearmor -o /usr/share/keyrings/scalyr-archive-keyring.gpg \
+        || error "Failed to add Scalyr GPG key."
+
+    # Add Scalyr apt repo
+    echo "deb [signed-by=/usr/share/keyrings/scalyr-archive-keyring.gpg] https://scalyr-repo.s3.amazonaws.com/stable/apt scalyr main" \
+        > /etc/apt/sources.list.d/scalyr.list
+
+    apt-get update -qq
+    # Install AIO package directly - bypasses system Python entirely
+    apt-get install -y scalyr-agent-2-aio \
+        || error "Failed to install scalyr-agent-2-aio. Check apt output above."
+
+elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
+    # Add Scalyr RPM GPG key
+    rpm --import https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF70CEEDB4AD7B6C6 2>/dev/null || true
+
+    # Add Scalyr yum repo
+    cat > /etc/yum.repos.d/scalyr.repo << 'EOF'
+[scalyr]
+name=Scalyr packages
+baseurl=https://scalyr-repo.s3.amazonaws.com/stable/yum
+enabled=1
+gpgcheck=1
+gpgkey=https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF70CEEDB4AD7B6C6
+EOF
+
+    if [[ "$PKG_MANAGER" == "dnf" ]]; then
+        dnf install -y scalyr-agent-2-aio \
+            || error "Failed to install scalyr-agent-2-aio."
+    else
+        yum install -y scalyr-agent-2-aio \
+            || error "Failed to install scalyr-agent-2-aio."
+    fi
+fi
+
 success "Scalyr Agent (AIO) installed successfully."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 3: SET SCALYR SERVER ────────────────────────────────────────────────
-step "Setting Scalyr server to: $SCALYR_SERVER"
+# ─── STEP 3: SET API KEY AND SCALYR SERVER ────────────────────────────────────
+step "Setting API key and Scalyr server..."
+scalyr-agent-2-config --set-api-key "$API_TOKEN" \
+    || error "Failed to set API key."
 scalyr-agent-2-config --set-scalyr-server "$SCALYR_SERVER" \
-    || error "Failed to set scalyr-server. Check that the agent installed correctly."
-success "Scalyr server set."
+    || error "Failed to set scalyr-server."
+success "API key and server configured."
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── STEP 4: DOWNLOAD CONFIG FROM GITHUB ─────────────────────────────────────
@@ -109,7 +139,7 @@ TEMP_CONFIG="$TEMP_DIR/$CONFIG_FILE"
 step "Downloading config '$CONFIG_FILE' from: $CONFIG_URL"
 curl -sf "$CONFIG_URL" -o "$TEMP_CONFIG" \
     || error "Failed to download '$CONFIG_FILE' from GitHub. Check the filename and repo."
-success "Config downloaded to: $TEMP_CONFIG"
+success "Config downloaded."
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── STEP 5: INJECT API KEY ───────────────────────────────────────────────────
@@ -134,21 +164,22 @@ chmod 640 "$AGENT_CONFIG_PATH"
 success "agent.json replaced with correct permissions."
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ─── STEP 7: RESTART AGENT ────────────────────────────────────────────────────
-step "Restarting Scalyr Agent service..."
+# ─── STEP 7: START AGENT ──────────────────────────────────────────────────────
+step "Starting Scalyr Agent service..."
 if command -v systemctl &>/dev/null; then
+    systemctl enable scalyr-agent-2 --quiet
     systemctl restart scalyr-agent-2 \
-        || error "Failed to restart scalyr-agent-2 via systemctl."
-    success "Scalyr Agent restarted via systemctl."
+        || error "Failed to start scalyr-agent-2 via systemctl."
+    success "Scalyr Agent started via systemctl."
 else
     service scalyr-agent-2 restart \
-        || error "Failed to restart scalyr-agent-2 via service."
-    success "Scalyr Agent restarted via service."
+        || error "Failed to start scalyr-agent-2 via service."
+    success "Scalyr Agent started via service."
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── CLEANUP ──────────────────────────────────────────────────────────────────
-rm -rf "$TEMP_DIR" ./install-agent.sh
+rm -rf "$TEMP_DIR"
 # ──────────────────────────────────────────────────────────────────────────────
 
 success "Scalyr Agent installation and configuration complete."
