@@ -29,6 +29,7 @@
   ],
   "implicit_metric_monitor": true,
   "implicit_agent_process_metrics_monitor": true
+}
 
 
 
